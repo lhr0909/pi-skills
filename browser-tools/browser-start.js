@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from "node:child_process";
-import puppeteer from "puppeteer-core";
+import { connectBrowser } from "./browser-connection.js";
 
 const useProfile = process.argv[2] === "--profile";
 
@@ -16,11 +16,8 @@ const SCRAPING_DIR = `${process.env.HOME}/.cache/browser-tools`;
 
 // Check if already running on :9222
 try {
-	const browser = await puppeteer.connect({
-		browserURL: "http://localhost:9222",
-		defaultViewport: null,
-	});
-	await browser.disconnect();
+	const browser = await connectBrowser();
+	await browser.close();
 	console.log("✓ Chrome already running on :9222");
 	process.exit(0);
 } catch {}
@@ -66,11 +63,8 @@ spawn(
 let connected = false;
 for (let i = 0; i < 30; i++) {
 	try {
-		const browser = await puppeteer.connect({
-			browserURL: "http://localhost:9222",
-			defaultViewport: null,
-		});
-		await browser.disconnect();
+		const browser = await connectBrowser();
+		await browser.close();
 		connected = true;
 		break;
 	} catch {

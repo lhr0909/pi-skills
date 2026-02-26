@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import puppeteer from "puppeteer-core";
+import { connectBrowser, getActivePage, getDefaultContext } from "./browser-connection.js";
 
 const args = process.argv.slice(2);
 const newTab = args.includes("--new");
@@ -16,24 +16,27 @@ if (!url) {
 	process.exit(1);
 }
 
-const b = await Promise.race([
-	puppeteer.connect({
-		browserURL: "http://localhost:9222",
-		defaultViewport: null,
-	}),
-	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-]).catch((e) => {
+const b = await connectBrowser().catch((e) => {
 	console.error("✗ Could not connect to browser:", e.message);
 	console.error("  Run: browser-start.js");
 	process.exit(1);
 });
 
 if (newTab) {
-	const p = await b.newPage();
+	const context = getDefaultContext(b);
+	if (!context) {
+		console.error("✗ No browser context found");
+		process.exit(1);
+	}
+	const p = await context.newPage();
 	await p.goto(url, { waitUntil: "domcontentloaded" });
 	console.log("✓ Opened:", url);
 } else {
-	const p = (await b.pages()).at(-1);
+	const p = getActivePage(b);
+	if (!p) {
+		console.error("✗ No active tab found");
+		process.exit(1);
+	}
 	await p.goto(url, { waitUntil: "domcontentloaded" });
 	if (reload) {
 		await p.reload({ waitUntil: "domcontentloaded" });
@@ -41,4 +44,4 @@ if (newTab) {
 	console.log("✓ Navigated to:", url);
 }
 
-await b.disconnect();
+await b.close();

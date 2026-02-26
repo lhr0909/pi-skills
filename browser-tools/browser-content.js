@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import puppeteer from "puppeteer-core";
+import { connectBrowser, getActivePage } from "./browser-connection.js";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
@@ -24,31 +24,25 @@ if (!url) {
 	process.exit(1);
 }
 
-const b = await Promise.race([
-	puppeteer.connect({
-		browserURL: "http://localhost:9222",
-		defaultViewport: null,
-	}),
-	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-]).catch((e) => {
+const b = await connectBrowser().catch((e) => {
 	console.error("✗ Could not connect to browser:", e.message);
 	console.error("  Run: browser-start.js");
 	process.exit(1);
 });
 
-const p = (await b.pages()).at(-1);
+const p = getActivePage(b);
 if (!p) {
 	console.error("✗ No active tab found");
 	process.exit(1);
 }
 
 await Promise.race([
-	p.goto(url, { waitUntil: "networkidle2" }),
+	p.goto(url, { waitUntil: "networkidle" }),
 	new Promise((r) => setTimeout(r, 10000)),
 ]).catch(() => {});
 
 // Get HTML via CDP (works even with TrustedScriptURL restrictions)
-const client = await p.createCDPSession();
+const client = await p.context().newCDPSession(p);
 const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true });
 const { outerHTML } = await client.send("DOM.getOuterHTML", { nodeId: root.nodeId });
 await client.detach();
@@ -100,4 +94,5 @@ if (article?.title) console.log(`Title: ${article.title}`);
 console.log("");
 console.log(content);
 
+await b.close();
 process.exit(0);
